@@ -3,7 +3,7 @@ const app = express();
 app.use(express.json());
 
 const SEAT_LOCK_DURATION = 60 * 1000; // 1 minute in milliseconds
-
+  
 // In-memory seat "database"
 let seats = {
   "1": { status: "available" },
