@@ -3,7 +3,7 @@ const rl = require('readline').createInterface({
     output: process.stdout
   });
   
-  let emps = [];
+  let emps = [];  
   
   function menu() {
     console.log('\nemployee management system');
