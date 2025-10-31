@@ -1,0 +1,54 @@
+// server.js
+const express = require("express");
+const app = express();
+
+// =============== Custom Middleware 1: Logger =================
+// Logs method, URL, and timestamp for every incoming request
+const loggerMiddleware = (req, res, next) => {
+  const currentTime = new Date().toISOString();
+  console.log(`[${currentTime}] ${req.method} ${req.originalUrl}`);
+  next(); // move to next middleware/route handler
+};
+
+// Apply logging middleware globally
+app.use(loggerMiddleware);
+
+// =============== Custom Middleware 2: Auth Check ==============
+// Checks if Authorization header contains 'Bearer mysecrettoken'
+const authMiddleware = (req, res, next) => {
+  const authHeader = req.headers["authorization"]; // e.g., "Bearer mysecrettoken"
+
+  if (!authHeader) {
+    return res.status(401).json({ error: "Authorization header missing" });
+  }
+
+  const token = authHeader.split(" ")[1]; // Get token part after 'Bearer'
+  if (token !== "mysecrettoken") {
+    return res.status(403).json({ error: "Invalid or missing token" });
+  }
+
+  next(); // Token valid → proceed
+};
+
+// =============== Routes =================
+
+// Public Route (No Authentication Needed)
+app.get("/public", (req, res) => {
+  res.json({ message: "Welcome to the public route!" });
+});
+
+// Protected Route (Requires Valid Token)
+app.get("/protected", authMiddleware, (req, res) => {
+  res.json({ message: "Access granted to protected route!" });
+});
+
+// Root Route (Optional)
+app.get("/", (req, res) => {
+  res.send("Server is running. Try /public or /protected");
+});
+
+// Start the Server
+const PORT = 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
