@@ -1,0 +1,155 @@
+// Account Entity
+
+import jakarta.persistence.*;
+
+/**
+ * Account.java: Hibernate Entity for a bank account.
+ */
+@Entity
+@Table(name = "accounts")
+public class Account {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+
+    @Column(name = "account_holder")
+    private String accountHolder;
+
+    @Column(name = "balance")
+    private double balance;
+
+    // Default constructor required by Hibernate
+    public Account() {}
+
+    public Account(String accountHolder, double balance) {
+        this.accountHolder = accountHolder;
+        this.balance = balance;
+    }
+
+    // --- Getters and Setters ---
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
+    public String getAccountHolder() { return accountHolder; }
+    public void setAccountHolder(String accountHolder) { this.accountHolder = accountHolder; }
+    public double getBalance() { return balance; }
+    public void setBalance(double balance) { this.balance = balance; }
+
+    @Override
+    public String toString() {
+        return "Account{id=" + id + ", holder='" + accountHolder + "', balance=" + String.format("%.2f", balance) + "}";
+    }
+}
+
+
+// Account DAO (Data Access Object)
+
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Repository;
+
+/**
+ * AccountDaoImpl.java: Persistence layer implementation using Hibernate.
+ * Marked with @Repository for Spring component scanning.
+ */
+@Repository
+public class AccountDaoImpl {
+
+    // Spring injects the SessionFactory configured in AppConfig
+    private final SessionFactory sessionFactory;
+
+    @Autowired
+    public AccountDaoImpl(SessionFactory sessionFactory) {
+        this.sessionFactory = sessionFactory;
+    }
+
+    private Session getCurrentSession() {
+        return sessionFactory.getCurrentSession();
+    }
+
+    /**
+     * Finds an account by its ID.
+     */
+    public Account findById(int id) {
+        return getCurrentSession().get(Account.class, id);
+    }
+
+    /**
+     * Saves or updates an account.
+     * This method assumes it's called within an active transaction.
+     */
+    public void update(Account account) {
+        getCurrentSession().update(account);
+    }
+    
+    /**
+     * Saves a new account.
+     */
+    public void save(Account account) {
+        getCurrentSession().save(account);
+    }
+}
+
+// Bank Service
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * BankServiceImpl.java: Service layer where transaction logic is defined.
+ * Marked with @Service for Spring component scanning.
+ */
+@Service
+public class BankServiceImpl {
+
+    private final AccountDaoImpl accountDao;
+
+    @Autowired
+    public BankServiceImpl(AccountDaoImpl accountDao) {
+        this.accountDao = accountDao;
+    }
+
+    /**
+     * Core business method to transfer money.
+     * * The @Transactional annotation ensures that:
+     * 1. A transaction starts when this method is called.
+     * 2. If the method completes successfully, the transaction commits (persisting both updates).
+     * 3. If any RuntimeException (like IllegalArgumentException) occurs, the transaction rolls back 
+     * (neither update is saved to the database).
+     */
+    @Transactional
+    public void transferMoney(int fromAccountId, int toAccountId, double amount, boolean shouldFail) {
+        System.out.println("\n--- Starting Transaction for Transfer (A: " + fromAccountId + " -> B: " + toAccountId + ") ---");
+        
+        // 1. Get Accounts
+        Account fromAccount = accountDao.findById(fromAccountId);
+        Account toAccount = accountDao.findById(toAccountId);
+
+        if (fromAccount == null || toAccount == null) {
+            throw new IllegalArgumentException("One or both accounts not found.");
+        }
+
+        // 2. Deduct money from source account
+        if (fromAccount.getBalance() < amount) {
+            throw new IllegalArgumentException("Insufficient funds in account " + fromAccountId);
+        }
+        fromAccount.setBalance(fromAccount.getBalance() - amount);
+        accountDao.update(fromAccount);
+        System.out.println("Step 1: Successfully DEBITED " + amount + " from A" + fromAccountId);
+        
+        // 3. Simulate failure to test rollback functionality
+        if (shouldFail) {
+            System.err.println("--- SIMULATING FAILURE (Throwing RuntimeException) ---");
+            throw new RuntimeException("Simulated Network Error during credit.");
+        }
+
+        // 4. Add money to destination account
+        toAccount.setBalance(toAccount.getBalance() + amount);
+        accountDao.update(toAccount);
+        System.out.println("Step 2: Successfully CREDITED " + amount + " to A" + toAccountId);
+        
+        System.out.println("--- Transaction Completed (Commit) ---");
+    }
+}

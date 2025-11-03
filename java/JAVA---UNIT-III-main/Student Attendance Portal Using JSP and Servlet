@@ -1,0 +1,170 @@
+// The JSP View: Attendance Form
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Attendance Portal</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; background-color: #e8f5e9; color: #333; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background-color: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1); width: 100%; max-width: 450px; }
+        h2 { color: #2e7d32; text-align: center; margin-bottom: 25px; border-bottom: 2px solid #a5d6a7; padding-bottom: 10px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
+        input[type="number"], input[type="date"], select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 12px; background-color: #4caf50; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; transition: background-color 0.3s; }
+        button:hover { background-color: #388e3c; }
+        .message { padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; font-weight: bold; }
+        .success { background-color: #c8e6c9; color: #2e7d32; border: 1px solid #4caf50; }
+        .error { background-color: #ffcdd2; color: #d32f2f; border: 1px solid #f44336; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Record Student Attendance</h2>
+
+        <!-- Check for and display messages from the Servlet -->
+        <%
+            String message = request.getParameter("message");
+            if (message != null) {
+                if (message.equals("success")) {
+                    out.println("<div class='message success'>Attendance recorded successfully!</div>");
+                } else if (message.equals("error")) {
+                    out.println("<div class='message error'>Error recording attendance. Please check server logs.</div>");
+                }
+            }
+        %>
+
+        <!-- Form submission uses POST and targets the Servlet URL -->
+        <form action="RecordAttendance" method="POST">
+            
+            <div class="form-group">
+                <label for="studentId">Student ID:</label>
+                <!-- Name attribute must match the parameter name used in the Servlet -->
+                <input type="number" id="studentId" name="studentId" required min="1">
+            </div>
+
+            <div class="form-group">
+                <label for="attendanceDate">Date:</label>
+                <input type="date" id="attendanceDate" name="attendanceDate" value="<%= new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date()) %>" required>
+            </div>
+
+            <div class="form-group">
+                <label for="status">Status:</label>
+                <select id="status" name="status" required>
+                    <option value="Present">Present</option>
+                    <option value="Absent">Absent</option>
+                    <option value="Late">Late</option>
+                    <option value="Excused">Excused</option>
+                </select>
+            </div>
+
+            <button type="submit">Submit Attendance</button>
+        </form>
+    </div>
+</body>
+</html>
+
+// The Servlet Controller: Attendance Processor
+
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+/**
+ * Servlet for handling attendance form submissions and saving data to the database.
+ * Mapped to the URL /RecordAttendance.
+ */
+@WebServlet("/RecordAttendance")
+public class AttendanceServlet extends HttpServlet {
+    private static final long serialVersionUID = 1L;
+
+    // --- JDBC Connection Details (MUST BE UPDATED) ---
+    private static final String JDBC_URL = "jdbc:mysql://localhost:3306/attendance_db";
+    private static final String JDBC_USER = "root";
+    private static final String JDBC_PASSWORD = "my_secure_password";
+    
+    // SQL for insertion into the Attendance table (Assumes table exists with columns: StudentID, AttendanceDate, Status)
+    private static final String INSERT_ATTENDANCE_SQL = 
+        "INSERT INTO Attendance (StudentID, AttendanceDate, Status) VALUES (?, ?, ?)";
+
+    /**
+     * Handles HTTP POST requests from the attendance form.
+     */
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        
+        // 1. Retrieve attendance data from the request parameters
+        String studentIdParam = request.getParameter("studentId");
+        String attendanceDate = request.getParameter("attendanceDate");
+        String status = request.getParameter("status");
+
+        // Simple validation and type conversion
+        int studentId = 0;
+        try {
+            studentId = Integer.parseInt(studentIdParam);
+        } catch (NumberFormatException e) {
+            // If ID is invalid, redirect back with an error
+            response.sendRedirect("attendanceForm.jsp?message=error");
+            return;
+        }
+
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        String redirectMessage;
+
+        try {
+            // 2. Establish JDBC connection
+            conn = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASSWORD);
+
+            // 3. Prepare the SQL statement
+            stmt = conn.prepareStatement(INSERT_ATTENDANCE_SQL);
+            stmt.setInt(1, studentId);
+            stmt.setString(2, attendanceDate); // Date is typically handled as a String in JDBC for simple date inputs
+            stmt.setString(3, status);
+
+            // 4. Execute the update (insert)
+            int rowsAffected = stmt.executeUpdate();
+
+            // 5. Set success message if insertion was successful
+            if (rowsAffected > 0) {
+                redirectMessage = "success";
+            } else {
+                redirectMessage = "error";
+            }
+
+        } catch (SQLException e) {
+            // Handle JDBC/SQL errors
+            System.err.println("Database error during attendance insertion: " + e.getMessage());
+            e.printStackTrace();
+            redirectMessage = "error";
+        } finally {
+            // 6. Close resources in the finally block
+            try {
+                if (stmt != null) stmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                System.err.println("Error closing JDBC resources: " + e.getMessage());
+            }
+        }
+        
+        // 7. Redirect back to the JSP page with the appropriate message parameter (PRG pattern)
+        response.sendRedirect("attendanceForm.jsp?message=" + redirectMessage);
+    }
+}
+
+// To use this application, ensure your database has a table defined like this (using MySQL syntax as an example):
+CREATE TABLE Attendance (
+    RecordID INT AUTO_INCREMENT PRIMARY KEY,
+    StudentID INT NOT NULL,
+    AttendanceDate DATE NOT NULL,
+    Status VARCHAR(10) NOT NULL
+);

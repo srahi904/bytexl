@@ -1,0 +1,126 @@
+// The Dependency Class
+
+/**
+ * Course.java
+ * This is the dependency that will be injected into the Student class.
+ */
+public class Course {
+
+    private String courseName;
+    private String courseCode;
+
+    public Course(String courseName, String courseCode) {
+        this.courseName = courseName;
+        this.courseCode = courseCode;
+    }
+
+    /**
+     * Prints details about the course.
+     */
+    public void getCourseDetails() {
+        System.out.println("Course: " + courseName + " (Code: " + courseCode + ")");
+    }
+}
+
+// The Dependent Class
+
+/**
+ * Student.java
+ * This is the dependent class that receives the Course dependency.
+ */
+public class Student {
+
+    // The dependency field
+    private final Course course;
+    private final String studentName;
+
+    /**
+     * Constructor used by Spring to inject the Course dependency.
+     * @param course The injected Course object.
+     * @param studentName The name of the student.
+     */
+    public Student(Course course, String studentName) {
+        this.course = course;
+        this.studentName = studentName;
+    }
+
+    /**
+     * Demonstrates that the dependency (Course) was successfully injected.
+     */
+    public void displayStudentInfo() {
+        System.out.println("--- Dependency Injection Successful ---");
+        System.out.println("Student: " + studentName);
+        System.out.print("Enrolled In: ");
+        // Call a method on the injected dependency
+        course.getCourseDetails(); 
+    }
+}
+
+
+// The Java-Based Configuration
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * AppConfig.java
+ * This class serves as the Java-based configuration file for Spring DI.
+ */
+@Configuration
+public class AppConfig {
+
+    /**
+     * Defines a Spring Bean for the Course object.
+     * The method name ("basicCourse") serves as the bean ID.
+     * @return A fully initialized Course instance.
+     */
+    @Bean
+    public Course basicCourse() {
+        // Creating the dependency
+        return new Course("Introduction to Computer Science", "CS101");
+    }
+
+    /**
+     * Defines a Spring Bean for the Student object.
+     * Spring automatically resolves and injects the 'Course' bean 
+     * defined above into the 'Student' constructor (constructor injection).
+     * @param course The Course bean injected by Spring.
+     * @return A fully initialized Student instance with its dependency wired.
+     */
+    @Bean
+    public Student studentBean(Course course) {
+        // Wiring the dependency (course) into the dependent (Student)
+        return new Student(course, "Alice Smith");
+    }
+}
+
+// Application Main Driver
+
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+
+/**
+ * MainApp.java
+ * The application entry point to initialize the Spring Container.
+ */
+public class MainApp {
+
+    public static void main(String[] args) {
+        // 1. Initialize the Spring Context using the Java Configuration class
+        // This tells Spring to scan the AppConfig for @Configuration and @Bean definitions.
+        System.out.println("Initializing Spring Context with Java Configuration...");
+        AnnotationConfigApplicationContext context = 
+            new AnnotationConfigApplicationContext(AppConfig.class);
+
+        // 2. Retrieve the Student bean from the container
+        // We use the method name (bean ID) 'studentBean' to fetch the object.
+        System.out.println("Retrieving Student bean...");
+        Student student = context.getBean("studentBean", Student.class);
+
+        // 3. Call the method to demonstrate that the Course dependency was injected
+        student.displayStudentInfo();
+
+        // 4. Close the context
+        context.close();
+        System.out.println("\nSpring Context closed.");
+    }
+}

@@ -1,0 +1,213 @@
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+/**
+ * Servlet implementation for displaying employee records and handling search.
+ * Mapped to the URL /EmployeeRecords.
+ */
+@WebServlet("/EmployeeRecords")
+public class EmployeeServlet extends HttpServlet {
+    private static final long serialVersionUID = 1L;
+
+    // --- JDBC Connection Details (MUST BE UPDATED) ---
+    private static final String JDBC_URL = "jdbc:mysql://localhost:3306/mydatabase";
+    private static final String JDBC_USER = "root";
+    private static final String JDBC_PASSWORD = "my_secure_password";
+    
+    // SQL Queries
+    private static final String SELECT_ALL_EMPLOYEES = "SELECT EmpID, Name, Salary FROM Employee ORDER BY EmpID";
+    private static final String SELECT_EMPLOYEE_BY_ID = "SELECT EmpID, Name, Salary FROM Employee WHERE EmpID = ?";
+
+    /**
+     * Handles HTTP GET requests. Used for initial load (display all) and search.
+     */
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        
+        response.setContentType("text/html");
+        PrintWriter out = response.getWriter();
+
+        // Check if an Employee ID was provided for a search
+        String employeeIdParam = request.getParameter("employeeId");
+        boolean isSearch = (employeeIdParam != null && !employeeIdParam.trim().isEmpty());
+
+        // Start HTML page structure and styling (Tailwind-inspired for modern look)
+        out.println("<!DOCTYPE html>");
+        out.println("<html lang=\"en\">");
+        out.println("<head>");
+        out.println("<meta charset=\"UTF-8\">");
+        out.println("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
+        out.println("<title>Employee Records</title>");
+        out.println("<style>");
+        // Custom CSS for aesthetics and responsiveness
+        out.println("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f7f9fc; color: #333; margin: 0; padding: 20px; }");
+        out.println(".container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }");
+        out.println("h1 { color: #1e3a8a; border-bottom: 2px solid #eff3ff; padding-bottom: 10px; margin-bottom: 30px; }");
+        out.println(".search-form { display: flex; gap: 10px; margin-bottom: 30px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafa; }");
+        out.println("input[type='text'] { padding: 10px; border: 1px solid #ccc; border-radius: 5px; flex-grow: 1; }");
+        out.println("button { padding: 10px 20px; background-color: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s; }");
+        out.println("button:hover { background-color: #2563eb; }");
+        out.println("table { width: 100%; border-collapse: collapse; margin-top: 20px; }");
+        out.println("th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }");
+        out.println("th { background-color: #f1f5f9; color: #4b5563; font-weight: 600; }");
+        out.println("tr:hover { background-color: #f9fafb; }");
+        out.println(".error { color: #b91c1c; background-color: #fee2e2; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #f87171; }");
+        out.println(".no-results { color: #4b5563; padding: 15px; border-radius: 8px; margin-top: 20px; background-color: #eef2ff; border: 1px solid #c7d2fe; }");
+        out.println("</style>");
+        out.println("</head>");
+        out.println("<body>");
+        out.println("<div class=\"container\">");
+        
+        out.println("<h1>Employee Records Dashboard</h1>");
+
+        // HTML Search Form (sends GET request back to this same servlet URL)
+        out.println("<form class=\"search-form\" action=\"EmployeeRecords\" method=\"GET\">");
+        out.println("<input type=\"text\" name=\"employeeId\" placeholder=\"Enter Employee ID to Search...\" value=\"" + (isSearch ? employeeIdParam : "") + "\">");
+        out.println("<button type=\"submit\">Search by ID</button>");
+        out.println("<a href=\"EmployeeRecords\"><button type=\"button\">Reset/View All</button></a>");
+        out.println("</form>");
+
+        // Decide which database operation to perform
+        if (isSearch) {
+            fetchEmployeeById(out, employeeIdParam);
+        } else {
+            fetchAllEmployees(out);
+        }
+
+        out.println("</div>");
+        out.println("</body>");
+        out.println("</html>");
+    }
+
+    /**
+     * Executes a query to fetch all employee records and displays them in an HTML table.
+     */
+    private void fetchAllEmployees(PrintWriter out) {
+        // Output header for the full list
+        out.println("<h2>All Employee Records</h2>");
+
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASSWORD);
+             PreparedStatement stmt = conn.prepareStatement(SELECT_ALL_EMPLOYEES);
+             ResultSet rs = stmt.executeQuery()) {
+
+            // Start the HTML table
+            out.println("<table>");
+            out.println("<thead><tr><th>Employee ID</th><th>Name</th><th>Salary</th></tr></thead>");
+            out.println("<tbody>");
+
+            boolean foundRecords = false;
+            while (rs.next()) {
+                foundRecords = true;
+                int id = rs.getInt("EmpID");
+                String name = rs.getString("Name");
+                double salary = rs.getDouble("Salary");
+                
+                // Print a table row for each employee
+                out.println("<tr>");
+                out.println("<td>" + id + "</td>");
+                out.println("<td>" + name + "</td>");
+                out.println("<td>$" + String.format("%.2f", salary) + "</td>");
+                out.println("</tr>");
+            }
+            
+            if (!foundRecords) {
+                out.println("<tr><td colspan='3' class='no-results'>No employee records found in the database.</td></tr>");
+            }
+
+            // Close table body and table
+            out.println("</tbody>");
+            out.println("</table>");
+
+        } catch (SQLException e) {
+            // Display JDBC/SQL error to the user
+            out.println("<div class='error'>");
+            out.println("<h2>Database Error</h2>");
+            out.println("<p>An error occurred while accessing the database. Please check connection details and table setup.</p>");
+            out.println("<p>Error Details: " + e.getMessage() + "</p>");
+            out.println("</div>");
+            // Log the exception to the server console (best practice)
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Executes a query to fetch a single employee record by ID and displays the result.
+     */
+    private void fetchEmployeeById(PrintWriter out, String employeeIdParam) {
+        
+        out.println("<h2>Search Results for ID: " + employeeIdParam + "</h2>");
+        
+        // Input validation: Ensure the parameter is a valid integer
+        int employeeId;
+        try {
+            employeeId = Integer.parseInt(employeeIdParam.trim());
+        } catch (NumberFormatException e) {
+            out.println("<div class='error'><p>Invalid Employee ID format. Please enter a whole number.</p></div>");
+            return;
+        }
+        
+        try (Connection conn = DriverManager.getConnection(JDBC_URL, JDBC_USER, JDBC_PASSWORD);
+             PreparedStatement stmt = conn.prepareStatement(SELECT_EMPLOYEE_BY_ID)) {
+            
+            // Set the parameter for the prepared statement (prevents SQL injection)
+            stmt.setInt(1, employeeId);
+            
+            try (ResultSet rs = stmt.executeQuery()) {
+                
+                // Start the HTML table
+                out.println("<table>");
+                out.println("<thead><tr><th>Employee ID</th><th>Name</th><th>Salary</th></tr></thead>");
+                out.println("<tbody>");
+
+                if (rs.next()) {
+                    // Record found
+                    int id = rs.getInt("EmpID");
+                    String name = rs.getString("Name");
+                    double salary = rs.getDouble("Salary");
+
+                    // Print the single table row
+                    out.println("<tr>");
+                    out.println("<td>" + id + "</td>");
+                    out.println("<td>" + name + "</td>");
+                    out.println("<td>$" + String.format("%.2f", salary) + "</td>");
+                    out.println("</tr>");
+                } else {
+                    // No record found
+                    out.println("<tr><td colspan='3' class='no-results'>No employee found with ID " + employeeId + ".</td></tr>");
+                }
+                
+                out.println("</tbody>");
+                out.println("</table>");
+
+            } // rs is closed here
+        } catch (SQLException e) {
+            // Display JDBC/SQL error
+            out.println("<div class='error'>");
+            out.println("<h2>Database Error</h2>");
+            out.println("<p>An error occurred during the search operation.</p>");
+            out.println("<p>Error Details: " + e.getMessage() + "</p>");
+            out.println("</div>");
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * By convention, a form submission with method="POST" would be handled by doPost.
+     * Since the search is implemented via GET to allow easy refresh/link sharing, 
+     * we simply redirect POST requests back to doGet.
+     */
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        doGet(request, response);
+    }
+}
